@@ -1,63 +1,44 @@
-import { SchemaDirectiveVisitor } from "apollo-server-express";
-import { defaultFieldResolver } from "graphql";
-import strategies from "./strategies";
+import { ApolloServer, gql, makeExecutableSchema } from "apollo-server";
+import AuthDirective from "./AuthDirective";
+import queryResolvers from "./resolvers";
 
-class AuthDirective extends SchemaDirectiveVisitor {
-  public visitObject(type) {
-    this.ensureFieldsWrapped(type);
-    type._requiredAuthRole = this.args.requires;
-  }
-  // Visitor methods for nested types like fields and arguments
-  // also receive a details object that provides information about
-  // the parent and grandparent types.
-  public visitFieldDefinition(field, details) {
-    this.ensureFieldsWrapped(details.objectType);
-    field._requiredAuthRole = this.args.requires;
+const typeDefs = gql`
+  directive @auth(requires: Role = ADMIN) on OBJECT | FIELD_DEFINITION
+
+  enum Role {
+    ADMIN
+    USER
   }
 
-  public ensureFieldsWrapped(objectType) {
-    // Mark the GraphQLObjectType object to avoid re-wrapping:
-    if (objectType._authFieldsWrapped) {
-      return;
-    }
-    objectType._authFieldsWrapped = true;
-
-    const fields = objectType.getFields();
-
-    Object.keys(fields).forEach((fieldName) => {
-      const field = fields[fieldName];
-      const {
-        resolve = defaultFieldResolver
-      } = field;
-      field.resolve = async function (...args) {
-        // Get the required Role from the field first, falling back
-        // to the objectType if no Role is required by the field:
-        const requiredRole =
-          field._requiredAuthRole || objectType._requiredAuthRole;
-
-        if (!requiredRole) {
-          // Let's be on the safe side
-          throw new Error("not authorized");
-        }
-
-        const requestData = args[2];
-        await this.executeStrategy(requiredRole, requestData);
-
-        return resolve.apply(this, args);
-      }.bind(this);
-    });
+  type User @auth(requires: USER) {
+    name: String
+    banned: Boolean @auth(requires: ADMIN)
   }
 
-  public async executeStrategy(role, requestData) {
-    // console.log(role);
-    // TODO: Resolve strategy call
-    const strategyResult = await strategies[role.toLowerCase()](requestData);
-
-    console.log(`Strategy result: ${strategyResult}`);
-    if (!strategyResult) {
-      throw new Error("not authorized");
-    }
+  type Query {
+    users: [User]
   }
-}
+`;
 
-export default AuthDirective;
+const resolvers = {
+  Query: queryResolvers,
+};
+
+const schema = makeExecutableSchema({
+  typeDefs,
+  resolvers,
+  schemaDirectives: {
+    auth: AuthDirective,
+  },
+});
+
+const server = new ApolloServer({
+  context: ({ req }) => ({ headers: req.headers }),
+  schema,
+  introspection: true,
+  playground: true,
+});
+
+server.listen().then(({ url }) => {
+  console.log(`🚀  Server ready at ${url}`);
+});

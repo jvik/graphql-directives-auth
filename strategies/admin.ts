@@ -1,5 +1,3 @@
-// TODO: Resolve role from database
-
 const ADMIN_SECRET = "JsRoundaboutAdmin";
 
 const adminStrategy = (requestData) => {
