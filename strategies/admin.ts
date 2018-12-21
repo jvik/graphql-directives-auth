@@ -1,14 +1,17 @@
-const ADMIN_SECRET = "JsRoundaboutAdmin";
+import jwt from "jsonwebtoken";
 
 const adminStrategy = (requestData) => {
+  const jsonWebToken = requestData.headers.authorization.replace("Bearer ", "");
   const headers = requestData.headers;
-
   if (!headers || !headers.authorization) {
     return false;
   }
+  jwt.verify(`${jsonWebToken}`, "thisisverysecret");
+  console.log(requestData.user);
 
-  const authHeader = headers.authorization;
-  return authHeader === ADMIN_SECRET;
+  if (requestData.user.isActive === true && requestData.user.isAdmin === true) {
+    return true;
+  }
 };
 
 export default adminStrategy;

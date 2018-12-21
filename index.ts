@@ -1,6 +1,25 @@
 import { ApolloServer, gql, makeExecutableSchema } from "apollo-server";
 import AuthDirective from "./AuthDirective";
 import queryResolvers from "./resolvers";
+import express from "express";
+import bodyParser from "body-parser";
+import jwtDecode from "jwt-decode";
+
+const app = express();
+
+const addJWTUserToHeader = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (req.headers.authorization) {
+    req.user = jwtDecode(authHeader);
+  }
+  next();
+};
+
+app.use(
+  addJWTUserToHeader,
+  bodyParser.json(),
+  bodyParser.urlencoded({ extended: true }),
+);
 
 const typeDefs = gql`
   directive @auth(requires: Role = ADMIN) on OBJECT | FIELD_DEFINITION
